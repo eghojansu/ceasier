@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.7.34031.279
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ceasier", "Ceasier.csproj", "{6CF65A60-7846-4343-802B-30788DDD8529}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CeasierTests", "..\CeasierTests\CeasierTests.csproj", "{38791D92-4AC2-4E46-AD60-07E6D625D3BB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6CF65A60-7846-4343-802B-30788DDD8529}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6CF65A60-7846-4343-802B-30788DDD8529}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6CF65A60-7846-4343-802B-30788DDD8529}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6CF65A60-7846-4343-802B-30788DDD8529}.Release|Any CPU.Build.0 = Release|Any CPU
+		{38791D92-4AC2-4E46-AD60-07E6D625D3BB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{38791D92-4AC2-4E46-AD60-07E6D625D3BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{38791D92-4AC2-4E46-AD60-07E6D625D3BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{38791D92-4AC2-4E46-AD60-07E6D625D3BB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3C22CA13-581E-40AA-915B-4032C8A5AA6D}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,12 @@
+.svn
+*.cache
+*.suo
+[Bb]in/
+[Oo]bj/
+[Tt]est[Rr]esult*/
+/.vs/
+/packages/
+/UpgradeLog.*
+appsettings.*.json
+appsettings.json
+!appsettings.example.json
