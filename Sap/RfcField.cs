@@ -9,85 +9,100 @@ namespace Ceasier.Sap
         public readonly string Name;
         public readonly string Column;
         public readonly object Value;
+        public readonly Func<IRfcStructure, object> Getter;
         public readonly Type Type = typeof(string);
         public readonly bool IsNullable = false;
 
-        public RfcField(string name, object column)
+        public RfcField(string name, string column)
         {
             Name = name;
-
-            if (column is string ucolumn)
-            {
-                Column = ucolumn;
-            }
-            else
-            {
-                Column = name;
-            }
-
-            if (column is bool nullable)
-            {
-                IsNullable = nullable;
-            }
+            Column = column ?? name;
         }
 
-        public RfcField(string name): this(name, name)
+        public RfcField(string name) : this(name, name)
         {
         }
 
-        public RfcField(string name, object column, object value): this(name, column)
+        public RfcField(string name, bool nullable): this(name)
         {
-            if (value is Type type)
+            IsNullable = nullable;
+        }
+
+        public RfcField(string name, Type type) : this(name)
+        {
+            Type = type;
+        }
+
+        public RfcField(string name, Func<IRfcStructure, object> getter) : this(name)
+        {
+            Getter = getter;
+        }
+
+        public RfcField(string name, string column, object value): this(name, column, value, null)
+        {
+        }
+
+        public RfcField(string name, string column, Type type) : this(name, column, null, type)
+        {
+        }
+
+        public RfcField(string name, string column, object value, Type type): this(name, column)
+        {
+            Value = value;
+            Type = type;
+
+            if (null == type && null != value)
             {
-                Type = type;
-            }
-            else if (null != value)
-            {
-                Value = value;
                 Type = value.GetType();
             }
         }
 
         public object GetValue(IRfcStructure row)
         {
+            object value;
+
             if (IsNullable)
+            {
+                value = null;
+            }
+            else if (null != Value)
+            {
+                value = Value;
+            }
+            else if (null != Getter)
+            {
+                value = Getter.Invoke(row);
+            }
+            else if (typeof(int) == Type)
+            {
+                value = row.GetInt(Name);
+            }
+            else if (typeof(decimal) == Type)
+            {
+                value = row.GetDecimal(Name);
+            }
+            else if (typeof(DateTime) == Type || typeof(DateTime?) == Type)
+            {
+                value = ToSafeDate(row.GetString(Name));
+            }
+            else
+            {
+                value = row.GetString(Name);
+            }
+
+            if (null == value || (value is string s && "" == s))
             {
                 return null;
             }
 
-            if (null != Value)
-            {
-                if (Value is Func<IRfcStructure, object> val)
-                {
-                    return val.Invoke(row);
-                }
-
-                return Value;
-            }
-
-            if (typeof(int) == Type)
-            {
-                return row.GetInt(Name);
-            }
-
-            if (typeof(decimal) == Type)
-            {
-                return row.GetDecimal(Name);
-            }
-
-            if (typeof(DateTime) == Type || typeof(DateTime?) == Type)
-            {
-                return ToSafeDate(row.GetString(Name));
-            }
-
-            return row.GetString(Name);
+            return value;
         }
 
         public static DateTime? ToSafeDate(string str)
         {
             if (string.IsNullOrEmpty(str) || str.Count() < 10)
             {
-                return default;
+                return null;
             }
 
             if (str.Contains('-') && DateTime.TryParse(str, out DateTime ndate))
@@ -100,7 +115,7 @@ namespace Ceasier.Sap
                 return sdate;
             }
 
-            return default;
+            return null;
         }
     }
 }

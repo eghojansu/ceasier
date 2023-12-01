@@ -1,9 +1,11 @@
 ﻿using Ceasier.Configuration;
 using Ceasier.Sap;
 using Ceasier.Sql;
+using Ceasier.Sql.Driver;
 using Microsoft.Extensions.Configuration;
 using SAP.Middleware.Connector;
 using System;
+using System.Collections.Generic;
 
 namespace Ceasier
 {
@@ -11,6 +13,7 @@ namespace Ceasier
     {
         public readonly T Value;
         public readonly IConfiguration Configuration;
+        private readonly Dictionary<string, Db> Connections = new Dictionary<string, Db>();
 
         public Beasier() : this("appsettings.json")
         {
@@ -22,11 +25,21 @@ namespace Ceasier
             Value = Configuration.Get<T>();
         }
 
-        public string GetDsn(string name) => Configuration.GetConnectionString(name);
+        public string GetDsn(string connectionName) => Configuration.GetConnectionString(connectionName);
 
-        public Mssql GetMssql(string dsn) => new Mssql(GetDsn(dsn));
+        public Db GetDb(IDriver driver, string connectionName)
+        {
+            if (!Connections.ContainsKey(connectionName))
+            {
+                Connections[connectionName] = new Db(driver, GetDsn(connectionName));
+            }
+            
+            return Connections[connectionName];
+        }
 
-        public Pgsql GetPgsql(string dsn) => new Pgsql(GetDsn(dsn));
+        public Db GetMssql(string connectionName) => GetDb(new Mssql(), connectionName);
+
+        public Db GetPgsql(string connectionName) => GetDb(new Pgsql(), connectionName);
 
         public RFCActor GetRFCActor(string name) => Configuration.GetSection($"RFCActors:{name}").Get<RFCActor>() ?? throw new Exception($"RFC Actor not found: {name}");
 

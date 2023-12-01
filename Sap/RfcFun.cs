@@ -45,9 +45,9 @@ namespace Ceasier.Sap
             {
                 if (_result == null)
                 {
-                    if (_resultTable == null)
+                    if (string.IsNullOrEmpty(_resultTable))
                     {
-                        throw new Exception("Result table is not defined");
+                        throw new ArgumentNullException("Result table should be defined");
                     }
 
                     _result = GetTable(_resultTable);
@@ -112,7 +112,7 @@ namespace Ceasier.Sap
 
         public IRfcTable GetTable(string table) => Fun.GetTable(table);
 
-        public void SetArgs(object sets) => Common.ObjectValues(sets).ForEach(set => Fun.SetValue(set.Key, set.Value));
+        public void SetArgs(object sets) => Common.ObjectMap(sets, Fun.SetValue);
 
         public void ApplyArgs(string table, object sets)
         {
@@ -121,7 +121,7 @@ namespace Ceasier.Sap
             args.Clear();
             args.Append();
 
-            Common.ObjectValues(sets).ForEach(set => args.SetValue(set.Key, set.Value));
+            Common.ObjectMap(sets, args.SetValue);
         }
 
         private void ProcessReturn()

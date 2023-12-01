@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Ceasier.Sql
 {
-    abstract public class QueryBuilder
+    public class QueryBuilder
     {
         private enum Query
         {
@@ -18,14 +18,14 @@ namespace Ceasier.Sql
         private readonly Dictionary<string, object> _parts = new Dictionary<string, object>();
         private readonly Dictionary<string, object> _params = new Dictionary<string, object>();
         private readonly List<string> _filters = new List<string>();
+        private readonly IDriver Driver;
         private string _sql;
         private bool? _scalar;
 
-        abstract protected string CreateParameterName(string name);
-
-        abstract protected string SelectStart(string sql);
-
-        abstract protected string SelectEnd(string sql);
+        public QueryBuilder(IDriver driver)
+        {
+            Driver = driver;
+        }
 
         public string Sql
         {
@@ -69,10 +69,9 @@ namespace Ceasier.Sql
         {
             var columns = new List<string>();
 
-            Common.ObjectValues(data).ForEach(set =>
-            {
-                columns.Add(set.Key);
-                _params.Add(CreateParameterName(set.Key), set.Value);
+            Common.ObjectMap(data, (string name, object value) => {
+                columns.Add(name);
+                _params.Add(Driver.CreateParameterName(this, name), value);
             });
 
             return From(table).AddPart("action", Query.INSERT).AddPart("line", "(" + string.Join(", ", columns) + ") VALUES (" + string.Join(", ", _params.Keys) + ")");
@@ -82,13 +81,13 @@ namespace Ceasier.Sql
         {
             var line = "";
 
-            Common.ObjectValues(data).ForEach(set =>
+            Common.ObjectMap(data, (string key, object value) =>
             {
-                var name = CreateParameterName(set.Key);
+                var name = Driver.CreateParameterName(this, key);
 
-                _params.Add(name, set.Value);
+                _params.Add(name, value);
 
-                line += $"{("" == line ? "" : ", ")}{set.Key} = {name}";
+                line += $"{("" == line ? "" : ", ")}{key} = {name}";
             });
 
             return From(table).Where(filters).AddPart("action", Query.UPDATE).AddPart("line", line);
@@ -115,7 +114,7 @@ namespace Ceasier.Sql
                 return ScalarQuery(f);
             }
 
-            Common.ObjectValues(filters).ForEach(set => AndWhere(set.Key, set.Value));
+            Common.ObjectMap(filters, (string name, object value) => AndWhere(name, value));
 
             return this;
         }
@@ -131,7 +130,7 @@ namespace Ceasier.Sql
                 _filters.Clear();
             }
 
-            var name = CreateParameterName(column);
+            var name = Driver.CreateParameterName(this, column);
 
             return AddFilter(name, value, $"{conj} {column} {opr} {name}");
         }
@@ -175,26 +174,17 @@ namespace Ceasier.Sql
 
         public QueryBuilder CallFunction(string fnName, object parameters, bool scalar)
         {
-            var scalar_ = scalar;
-
             if (null != parameters)
             {
-                if (parameters is bool f)
+                Common.ObjectMap(parameters, (string key, object value) =>
                 {
-                    scalar_ = f;
-                }
-                else
-                {
-                    Common.ObjectValues(parameters).ForEach(set =>
-                    {
-                        var name = CreateParameterName(set.Key);
+                    var name = Driver.CreateParameterName(this, key);
 
-                        AddFilter(name, set.Value, name);
-                    });
-                }
+                    AddFilter(name, value, name);
+                });
             }
 
-            return From(fnName).ScalarQuery(scalar_).AddPart("action", Query.FUNCTION);
+            return From(fnName).ScalarQuery(scalar).AddPart("action", Query.FUNCTION);
         }
 
         public QueryBuilder AddFilter(string name, object value, string expr)
@@ -230,7 +220,7 @@ namespace Ceasier.Sql
             return this;
         }
 
-        protected bool WithPart<T>(string part, out T output)
+        public bool WithPart<T>(string part, out T output)
         {
             output = default;
 
@@ -242,7 +232,7 @@ namespace Ceasier.Sql
             return null != output && (!(output is string s) || !string.IsNullOrEmpty(s));
         }
 
-        protected bool IsLimited(out int limit)
+        public bool IsLimited(out int limit)
         {
             var limited = WithPart("limit", out int val) && val > 0;
 
@@ -251,12 +241,12 @@ namespace Ceasier.Sql
             return limited;
         }
 
-        protected bool IsStarted()
+        public bool IsStarted()
         {
             return IsStarted(out int _);
         }
 
-        protected bool IsStarted(out int offset)
+        public bool IsStarted(out int offset)
         {
             var starting = WithPart("offset", out int val) && val > 0;
 
@@ -277,7 +267,7 @@ namespace Ceasier.Sql
 
         private string BuildSelect(bool filters)
         {
-            var sql = SelectStart("SELECT");
+            var sql = Driver.QuerySelectStart(this, "SELECT");
 
             if (_parts.ContainsKey("columns"))
             {
@@ -310,7 +300,7 @@ namespace Ceasier.Sql
                 sql += $" ORDER BY {order}";
             }
 
-            return SelectEnd(sql);
+            return Driver.QuerySelectEnd(this, sql);
         }
 
         private string BuildFilters() => BuildFilters(" WHERE ", " ");

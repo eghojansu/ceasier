@@ -4,79 +4,56 @@ using System.Data.Common;
 using System.Data;
 using System.Linq;
 using Ceasier.Utils;
+using System.Web.Mvc;
 
 namespace Ceasier.Sql
 {
-    public abstract class Db<R> where R: DbDataReader
+    public class Db : IDb
     {
         private static readonly Type ReaderType = typeof(DbDataReader);
 
-        protected string Dsn;
+        private readonly string Dsn;
 
-        protected abstract DbConnection CreateConnection(string Dsn);
+        private readonly IDriver Driver;
 
-        protected abstract DbParameter CreateParameterFor(DbCommand cmd, string name, object value);
+        private DbConnection _connection;
 
-        public abstract QueryBuilder Qb();
-
-        public abstract DbCommand CreateCommand(string commandText, CommandType commandType, DbTransaction transaction);
-
-        public abstract void Insert(DataTable dt);
-
-        public abstract void Insert(string spName, DataTable dt);
-
-        public abstract bool Exists(string tableName);
-
-        public abstract bool Create(string tableName, string[] definitions, bool exists);
-
-        public abstract bool Drop(string tableName, bool exists);
-
-        public abstract bool Truncate(string tableName, bool resetIdentity);
-
-        public Db(string connectionString) => Dsn = connectionString;
-
-        public DbConnection Connection
+        public Db(IDriver driver, string connectionString)
         {
-            get
-            {
-                if (string.IsNullOrEmpty(Dsn))
-                {
-                    throw new ArgumentNullException("Connection is not defined properly");
-                }
-
-                return CreateConnection(Dsn);
-            }
+            Driver = driver;
+            Dsn = connectionString;
         }
 
-        public bool Create(string tableName, string[] definitions) => Create(tableName, definitions, false);
+        public DbConnection Connection => GetConnection();
 
-        public bool Drop(string tableName) => Drop(tableName, false);
-
-        public bool Truncate(string tableName) => Truncate(tableName, false);
-
-        public T Run<T>(QueryBuilder qb) => Run<T>(qb.Sql, qb.Params, qb.Scalar, CommandType.Text);
-
-        public T Run<T>(string commandText, object parameters, bool scalar, CommandType commandType) => Run<T>(commandText, parameters, scalar, commandType, null);
-
-        public T Run<T>(string commandText, object parameters, bool scalar, CommandType commandType, DbTransaction transaction)
+        public DbConnection GetConnection()
         {
-            return Run<T>(CreateCommand(commandText, commandType, transaction), parameters, scalar);
+            if (null != _connection)
+            {
+                return _connection;
+            }
+
+            if (string.IsNullOrEmpty(Dsn))
+            {
+                throw new ArgumentNullException("Connection is not defined properly");
+            }
+
+            _connection = Driver.CreateConnection(Dsn);
+
+            return _connection;
         }
 
         public T Run<T>(DbCommand cmd, object parameters, bool scalar)
         {
             var auto = cmd.Connection.State != ConnectionState.Open;
             var expectedType = typeof(T);
-            var readerType = typeof(DbDataReader);
-            var scalar_ = parameters is bool p ? p : scalar;
-            var parameters_ = parameters is bool ? null : parameters;
             dynamic result;
 
             try
             {
-                if (null != parameters_)
+                if (null != parameters)
                 {
-                    AddParameters(cmd, parameters_);
+                    AddParameters(cmd, parameters);
                 }
 
                 if (auto)
@@ -84,12 +61,12 @@ namespace Ceasier.Sql
                     cmd.Connection.Open();
                 }
 
-                if (expectedType == readerType || expectedType.IsSubclassOf(readerType))
+                if (IsReading<T>())
                 {
                     auto = false;
                     result = cmd.ExecuteReader(CommandBehavior.CloseConnection);
                 }
-                else if (scalar_)
+                else if (scalar)
                 {
                     result = cmd.ExecuteScalar();
                 }
@@ -103,7 +80,7 @@ namespace Ceasier.Sql
                     }
                 }
 
-                return (T)Convert.ChangeType(result, expectedType);
+                return (T) Convert.ChangeType(result, expectedType);
             }
             catch (Exception ex)
             {
@@ -118,172 +95,345 @@ namespace Ceasier.Sql
             }
         }
 
-        public List<Dictionary<string, object>> SPResult(string procedureName) => SPResult(procedureName, null);
-
-        public List<Dictionary<string, object>> SPResult(string procedureName, object parameters) => BuildRows(SPRun(procedureName, parameters));
-
-        public Dictionary<string, object> SPFirst(string procedureName) => SPFirst(procedureName, null);
-
-        public Dictionary<string, object> SPFirst(string procedureName, object parameters) => SPResult(procedureName, parameters)?.ElementAtOrDefault(0);
-
-        public DbDataReader SPRun(string procedureName, object parameters) => SPRun<R>(procedureName, parameters);
-
-        public T SPRun<T>(string procedureName) => SPRun<T>(procedureName, null);
-
-        public T SPRun<T>(string procedureName, object parameters) => SPRun<T>(procedureName, parameters, false);
-
-        public T SPRun<T>(string procedureName, object parameters, bool scalar)
+        public T Run<T>(string cmd, object parameters, bool scalar, CommandType commandType)
         {
-            var values = parameters;
-
-            if (!scalar && !IsReading<T>())
-            {
-                var args = Common.ObjectValues(parameters);
-                var param = CreateParameter(null, "_", null);
-
-                args.Add(new KeyValuePair<string, object>(param.ParameterName, param));
-
-                values = args;
-            }
-
-            return Run<T>(procedureName, values, scalar, CommandType.StoredProcedure);
+            return Run<T>(Driver.CreateCommand(this, cmd, commandType, null), parameters, scalar);
         }
 
-        public List<Dictionary<string, object>> FnResult(string functionName) => FnResult(functionName, null);
+        public T Run<T>(QueryBuilder qb)
+        {
+            return Run<T>(qb.Sql, qb.Params, qb.Scalar, CommandType.Text);
+        }
 
-        public List<Dictionary<string, object>> FnResult(string functionName, object parameters) => BuildRows(FnRun(functionName, parameters));
-
-        public Dictionary<string, object> FnFirst(string functionName) => FnFirst(functionName, null);
-
-        public Dictionary<string, object> FnFirst(string functionName, object parameters) => FnResult(functionName, parameters)?.ElementAtOrDefault(0);
-
-        public DbDataReader FnRun(string functionName, object parameters) => FnRun<R>(functionName, parameters);
-
-        public T FnRun<T>(string functionName) => FnRun<T>(functionName, null);
-
-        public T FnRun<T>(string functionName, object parameters) => FnRun<T>(functionName, parameters, true);
-
-        public T FnRun<T>(string functionName, object parameters, bool scalar) => Run<T>(Qb().CallFunction(functionName, parameters, scalar));
-
-        public bool TryQuery(string sql) => TryQuery(sql, null);
-
-        public bool TryQuery(string sql, object parameters)
+        public bool TryRun(string cmd, object parameters)
         {
             try
             {
-                Query<int>(sql, parameters, false);
-
-                return true;
-            } catch
+                Run<int>(cmd, parameters, false, CommandType.Text);
+            }
+            catch
             {
                 return false;
             }
+
+            return true;
         }
 
-        public List<Dictionary<string, object>> QueryResult(QueryBuilder qb) => QueryResult(qb.Sql, qb.Params);
+        public bool TryRun(string cmd) => TryRun(cmd, null);
 
-        public List<Dictionary<string, object>> QueryResult(string sql) => QueryResult(sql, null);
+        public DbDataReader Run(string cmd, object parameters, CommandType commandType)
+        {
+            return Driver.GetReader(this, cmd, parameters, commandType);
+        }
 
-        public List<Dictionary<string, object>> QueryResult(string sql, object parameters) => BuildRows(Query(sql, parameters));
+        public DbDataReader Run(QueryBuilder qb)
+        {
+            return Run(qb.Sql, qb.Params, CommandType.Text);
+        }
 
-        public Dictionary<string, object> QueryFirst(QueryBuilder qb) => QueryFirst(qb.Sql, qb.Params);
+        public List<Dictionary<string, object>> Result(string cmd, object parameters, CommandType commandType)
+        {
+            return ReadRows(Run(cmd, parameters, commandType));
+        }
 
-        public Dictionary<string, object> QueryFirst(string sql) => QueryFirst(sql, null);
+        public List<Dictionary<string, object>> Result(string cmd, CommandType commandType)
+        {
+            return Result(cmd, null, commandType);
+        }
 
-        public Dictionary<string, object> QueryFirst(string sql, object parameters) => QueryResult(sql, parameters)?.ElementAtOrDefault(0);
+        public List<Dictionary<string, object>> Result(QueryBuilder qb)
+        {
+            return Result(qb.Sql, qb.Params, CommandType.Text);
+        }
 
-        public DbDataReader Query(QueryBuilder qb) => Query(qb.Sql, qb.Params);
+        public Dictionary<string, object> ResultFirst(string cmd, object parameters, CommandType commandType)
+        {
+            return Result(cmd, parameters, commandType).FirstOrDefault();
+        }
 
-        public DbDataReader Query(string sql) => Query(sql, null);
+        public Dictionary<string, object> ResultFirst(string cmd, CommandType commandType)
+        {
+            return ResultFirst(cmd, null, commandType);
+        }
 
-        public DbDataReader Query(string sql, object parameters) => Query<R>(sql, parameters, false);
+        public Dictionary<string, object> ResultFirst(QueryBuilder qb)
+        {
+            return ResultFirst(qb.Sql, qb.Params, CommandType.Text);
+        }
 
-        public T Query<T>(string sql) => Query<T>(sql, false);
+        public T Query<T>(string cmd, object parameters, bool scalar)
+        {
+            return Run<T>(cmd, parameters, scalar, CommandType.Text);
+        }
 
-        public T Query<T>(string sql, object parameters) => Query<T>(sql, parameters, false);
+        public DbDataReader Query(string cmd, object parameters)
+        {
+            return Run(cmd, parameters, CommandType.Text);
+        }
 
-        public T Query<T>(string sql, object parameters, bool scalar) => Run<T>(sql, parameters, scalar, CommandType.Text);
+        public DbDataReader Query(string cmd)
+        {
+            return Query(cmd, null);
+        }
 
-        public T Query<T>(QueryBuilder qb) => Query<T>(qb.Sql, qb.Params, qb.Scalar);
+        public List<Dictionary<string, object>> QueryResult(string cmd, object parameters)
+        {
+            return Result(cmd, parameters, CommandType.Text);
+        }
 
-        public DbDataReader Fetch(string table) => Fetch(table, null);
+        public List<Dictionary<string, object>> QueryResult(string cmd)
+        {
+            return QueryResult(cmd, null);
+        }
 
-        public DbDataReader Fetch(string table, object filters) => Fetch(table, filters, null);
+        public Dictionary<string, object> QueryFirst(string cmd, object parameters)
+        {
+            return ResultFirst(cmd, parameters, CommandType.Text);
+        }
 
-        public DbDataReader Fetch(string table, object filters, Dictionary<string, object> options) => Query(Qb().Find(table, filters, options));
+        public Dictionary<string, object> QueryFirst(string cmd)
+        {
+            return QueryFirst(cmd, null);
+        }
 
-        public List<Dictionary<string, object>> Find(string table) => Find(table, null);
+        public T Sp<T>(string name, object parameters, bool scalar)
+        {
+            if (!scalar && !IsReading<T>())
+            {
+                var cmd = Driver.CreateCommand(this, name, CommandType.StoredProcedure, null);
 
-        public List<Dictionary<string, object>> Find(string table, object filters) => Find(table, filters, null);
+                AddParameters(cmd, parameters);
+                AddParameter(cmd, "_", null);
 
-        public List<Dictionary<string, object>> Find(string table, object filters, Dictionary<string, object> options) => QueryResult(Qb().Find(table, filters, options));
+                return Run<T>(cmd, null, scalar);
+            }
 
-        public Dictionary<string, object> First(string table) => First(table, null);
+            return Run<T>(name, parameters, scalar, CommandType.StoredProcedure);
+        }
 
-        public Dictionary<string, object> First(string table, object filters) => First(table, filters, null);
+        public T Sp<T>(string name, object parameters)
+        {
+            return Sp<T>(name, parameters, false);
+        }
 
-        public Dictionary<string, object> First(string table, object filters, Dictionary<string, object> options) => QueryFirst(Qb().First(table, filters, options));
+        public T Sp<T>(string name, bool scalar)
+        {
+            return Sp<T>(name, null, scalar);
+        }
 
-        public int Count(string table) => Count(table, null);
+        public T Sp<T>(string name)
+        {
+            return Sp<T>(name, false);
+        }
 
-        public int Count(string table, object filters) => Count(table, filters, null);
+        public DbDataReader Sp(string name, object parameters)
+        {
+            return Run(name, parameters, CommandType.StoredProcedure);
+        }
+
+        public DbDataReader Sp(string name)
+        {
+            return Sp(name, null);
+        }
+
+        public List<Dictionary<string, object>> SpResult(string name, object parameters)
+        {
+            return Result(name, parameters, CommandType.StoredProcedure);
+        }
+
+        public List<Dictionary<string, object>> SpResult(string name)
+        {
+            return SpResult(name, null);
+        }
+
+        public Dictionary<string, object> SpFirst(string name, object parameters)
+        {
+            return ResultFirst(name, parameters, CommandType.StoredProcedure);
+        }
+
+        public Dictionary<string, object> SpFirst(string name)
+        {
+            return SpFirst(name, null);
+        }
+
+        public T Fn<T>(string name, object parameters, bool scalar)
+        {
+            return Run<T>(Qb().CallFunction(name, parameters, scalar));
+        }
+
+        public T Fn<T>(string name, object parameters)
+        {
+            return Fn<T>(name, parameters, true);
+        }
+
+        public T Fn<T>(string name, bool scalar)
+        {
+            return Fn<T>(name, null, scalar);
+        }
+
+        public T Fn<T>(string name)
+        {
+            return Fn<T>(name, true);
+        }
+
+        public DbDataReader Fn(string name, object parameters)
+        {
+            return Run(Qb().CallFunction(name, parameters, false));
+        }
+
+        public DbDataReader Fn(string name)
+        {
+            return Fn(name, null);
+        }
+
+        public List<Dictionary<string, object>> FnResult(string name, object parameters)
+        {
+            return Result(Qb().CallFunction(name, parameters, false));
+        }
+
+        public List<Dictionary<string, object>> FnResult(string name)
+        {
+            return FnResult(name, null);
+        }
+
+        public Dictionary<string, object> FnFirst(string name, object parameters)
+        {
+            return ResultFirst(Qb().CallFunction(name, parameters, false));
+        }
+
+        public Dictionary<string, object> FnFirst(string name)
+        {
+            return FnFirst(name, null);
+        }
+
+        public DbDataReader Read(string table, object filters, Dictionary<string, object> options)
+        {
+            return Run(Qb().Find(table, filters, options));
+        }
+
+        public DbDataReader Read(string table, object filters)
+        {
+            return Read(table, filters, null);
+        }
+
+        public DbDataReader Read(string table)
+        {
+            return Read(table, null);
+        }
+
+        public List<Dictionary<string, object>> Find(string table, object filters, Dictionary<string, object> options)
+        {
+            return Result(Qb().Find(table, filters, options));
+        }
+
+        public List<Dictionary<string, object>> Find(string table, object filters)
+        {
+            return Find(table, filters, null);
+        }
+
+        public List<Dictionary<string, object>> Find(string table)
+        {
+            return Find(table, null);
+        }
+
+        public Dictionary<string, object> First(string table, object filters, Dictionary<string, object> options)
+        {
+            return ResultFirst(Qb().Find(table, filters, options));
+        }
+
+        public Dictionary<string, object> First(string table, object filters)
+        {
+            return First(table, filters, null);
+        }
+
+        public Dictionary<string, object> First(string table)
+        {
+            return First(table, null);
+        }
 
         public int Count(string table, object filters, Dictionary<string, object> options)
         {
-            return Convert.ToInt32(QueryFirst(Qb().Find(table, filters, options).Select("count(*) AS c"))?["c"] ?? 0);
+            return Convert.ToInt32(ResultFirst(Qb().Find(table, filters, options).Select("count(*) AS c"))?["c"] ?? 0);
         }
 
-        public int Insert(string table, object data) => Query<int>(Qb().Insert(table, data));
+        public int Count(string table, object filters)
+        {
+            return Count(table, filters, null);
+        }
 
-        public int Update(string table, object data, object filters) => Query<int>(Qb().Update(table, data, filters));
+        public int Count(string table)
+        {
+            return Count(table, null);
+        }
 
-        public int Delete(string table, object filters) => Query<int>(Qb().Delete(table, filters));
+        public int Insert(string table, object data) => Run<int>(Qb().Insert(table, data));
 
-        public List<Dictionary<string, object>> BuildRows(DbDataReader row) => BuildRows(row, true);
+        public void Insert(DataTable dt) => Driver.TableInsert(this, dt);
 
-        public List<Dictionary<string, object>> BuildRows(DbDataReader row, bool close)
+        public void Insert(string spName, DataTable dt)
+        {
+            if (!Driver.SupportTableParameter())
+            {
+                throw new InvalidOperationException($"Driver not supporting table parameter: {Driver.GetType().Name}");
+            }
+
+            Sp<int>(spName, new Dictionary<string, object>() { { dt.TableName, dt} });
+        }
+
+        public int Update(string table, object data, object filters) => Run<int>(Qb().Update(table, data, filters));
+
+        public int Delete(string table, object filters) => Run<int>(Qb().Delete(table, filters));
+
+        public bool Exists(string tableName) => Driver.TableExists(this, tableName);
+
+        public bool Create(string tableName, string[] definitions, bool exists) => Driver.TableCreate(this, tableName, definitions, exists);
+
+        public bool Create(string tableName, string[] definitions) => Create(tableName, definitions, false);
+
+        public bool Drop(string tableName, bool exists) => Driver.TableDrop(this, tableName, exists);
+
+        public bool Drop(string tableName) => Drop(tableName, false);
+
+        public bool Truncate(string tableName, bool resetIdentity) => Driver.TableTruncate(this, tableName, resetIdentity);
+
+        public bool Truncate(string tableName) => Truncate(tableName, false);
+
+        public QueryBuilder Qb() => new QueryBuilder(Driver);
+
+        public List<Dictionary<string, object>> ReadRows(DbDataReader reader, bool close)
         {
             var rows = new List<Dictionary<string, object>>();
 
-            while (row.Read())
+            while (reader.Read())
             {
-                rows.Add(BuildRow(row));
+                rows.Add(ReadRow(reader));
             }
 
             if (close)
             {
-                row.Close();
+                reader.Close();
             }
 
             return rows;
         }
 
-        public Dictionary<string, object> BuildRow(DbDataReader row)
+        public List<Dictionary<string, object>> ReadRows(DbDataReader reader) => ReadRows(reader, true);
+
+        public Dictionary<string, object> ReadRow(DbDataReader reader)
         {
             var item = new Dictionary<string, object>();
 
-            for (int i = 0; i < row.FieldCount; i++)
+            for (int i = 0; i < reader.FieldCount; i++)
             {
-                item.Add(row.GetName(i), row.GetValue(i));
+                item.Add(reader.GetName(i), reader.GetValue(i));
             }
 
             return item;
         }
 
-        private DbParameter CreateParameter(DbCommand cmd, string name, object value)
+        private void AddParameter(DbCommand cmd, string name, object value)
         {
-            if (null != name && name.Equals("_"))
-            {
-                var returnName = value is string n ? n : "returnValue";
-                var param = CreateParameterFor(cmd, returnName, null);
-
-                param.Direction = ParameterDirection.ReturnValue;
-                param.DbType = DbType.Int32;
-
-                return param;
-            }
-
-            return CreateParameterFor(cmd, name, value ?? DBNull.Value);
+            cmd.Parameters.Add(CreateParameter(cmd, name, value));
         }
 
         private DbCommand AddParameters(DbCommand cmd, object parameters)
@@ -292,20 +442,34 @@ namespace Ceasier.Sql
             {
                 foreach (var value in positionals)
                 {
-                    cmd.Parameters.Add(CreateParameter(cmd, null, value));
+                    AddParameter(cmd, null, value);
                 }
-            } else
+            }
+            else
             {
-                Common.ObjectValues(parameters).ForEach(set =>
-                {
-                    cmd.Parameters.Add(CreateParameter(cmd, set.Key, set.Value));
-                });
+                Common.ObjectMap(parameters, (string name, object value) => AddParameter(cmd, name, value));
             }
 
             return cmd;
         }
 
-        private bool TryGetReturnParameter(DbCommand cmd, out int value)
+        private DbParameter CreateParameter(DbCommand cmd, string name, object value)
+        {
+            if (null != name && name.Equals("_"))
+            {
+                var returnName = value is string n ? n : "returnValue";
+                var param = Driver.CreateParameterFor(cmd, returnName, null);
+
+                param.Direction = ParameterDirection.ReturnValue;
+                param.DbType = DbType.Int32;
+
+                return param;
+            }
+
+            return Driver.CreateParameterFor(cmd, name, value ?? DBNull.Value);
+        }
+
+        private static bool TryGetReturnParameter(DbCommand cmd, out int value)
         {
             value = 0;
 
@@ -313,7 +477,7 @@ namespace Ceasier.Sql
             {
                 if (item.Direction == ParameterDirection.ReturnValue)
                 {
-                    value = (int) item.Value;
+                    value = (int)item.Value;
 
                     return true;
                 }
@@ -322,6 +486,6 @@ namespace Ceasier.Sql
             return false;
         }
 
-        private bool IsReading<T>() => ReaderType.IsAssignableFrom(typeof(T));
+        private static bool IsReading<T>() => ReaderType.IsAssignableFrom(typeof(T));
     }
 }
