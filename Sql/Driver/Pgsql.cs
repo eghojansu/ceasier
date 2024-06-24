@@ -133,6 +133,11 @@ namespace Ceasier.Sql.Driver
 
             return NpgsqlDbType.Varchar;
         }
+
+        public bool IsConnectionError(Exception error)
+        {
+            return error.InnerException.Message.StartsWith("28P01") || error.InnerException.Message.StartsWith("42501");
+        }
     }
 
     public class DTCopy

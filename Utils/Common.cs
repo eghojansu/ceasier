@@ -7,6 +7,13 @@ namespace Ceasier.Utils
 {
     public static class Common
     {
+        public static readonly Type FloatType = typeof(float);
+        public static readonly Type DoubleType = typeof(double);
+        public static readonly Type IntType = typeof(int);
+        public static readonly Type DecimalType = typeof(decimal);
+        public static readonly Type DateTimeType = typeof(DateTime);
+        public static readonly Type StringType = typeof(string);
+
         public static string Seed(int length) => Path.GetRandomFileName().Replace(".", "").Substring(0, length);
 
         public static string Seed() => Seed(8);

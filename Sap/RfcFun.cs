@@ -1,6 +1,7 @@
 ﻿using Ceasier.Utils;
 using SAP.Middleware.Connector;
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 
@@ -86,7 +87,7 @@ namespace Ceasier.Sap
             var dt = new DataTable(table);
             var list = fields.ToList();
 
-            list.ForEach(field => dt.Columns.Add(field.Column, field.Type));
+            list.ForEach(field => dt.Columns.Add(field.Column, field.ValueType));
 
             foreach (var row in Result)
             {
@@ -114,6 +115,58 @@ namespace Ceasier.Sap
 
         public void SetArgs(object sets) => Common.ObjectMap(sets, Fun.SetValue);
 
+        public void ApplyArg(IRfcTable table, string field, object value, Type type)
+        {
+            if (Common.IntType == type)
+            {
+                table.SetValue(field, (int) value);
+            }
+            else if (Common.DecimalType == type)
+            {
+                table.SetValue(field, (decimal) value);
+            }
+            else if (Common.FloatType == type || Common.DoubleType == type)
+            {
+                table.SetValue(field, (double) value);
+            }
+            else if (Common.DateTimeType == type)
+            {
+                table.SetValue(field, (DateTime) value);
+            }
+            else
+            {
+                table.SetValue(field, value ?? string.Empty);
+            }
+        }
+
+        public void ApplyArg(IRfcTable table, RfcField field, Dictionary<string, object> row)
+        {
+            ApplyArg(table, field.Name, field.GetValue(row), field.ValueType);
+        }
+
+        public void ApplyArgs(IRfcTable table, RfcField[] fields, Dictionary<string, object> row, bool reset)
+        {
+            if (reset)
+            {
+                table.Clear();
+            }
+
+            if (table.Count == 0)
+            {
+                table.Append();
+            }
+
+            foreach (var field in fields)
+            {
+                ApplyArg(table, field, row);
+            }
+        }
+
+        public void ApplyArgs(IRfcTable table, RfcField[] fields, Dictionary<string, object> row)
+        {
+            ApplyArgs(table, fields, row, true);
+        }
+
         public void ApplyArgs(string table, object sets)
         {
             IRfcTable args = Fun.GetTable(table);
@@ -121,7 +174,7 @@ namespace Ceasier.Sap
             args.Clear();
             args.Append();
 
-            Common.ObjectMap(sets, args.SetValue);
+            Common.ObjectMap(sets, (field, value) => ApplyArg(args, field, value, value?.GetType()));
         }
 
         private void ProcessReturn()

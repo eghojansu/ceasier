@@ -117,5 +117,10 @@ namespace Ceasier.Sql.Driver
 
             return cmd;
         }
+
+        public bool IsConnectionError(Exception error)
+        {
+            return false;
+        }
     }
 }

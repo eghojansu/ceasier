@@ -1,0 +1,37 @@
+{
+  "App": {
+    "Name": "MyApp",
+    "Short": "MA",
+    "Version": "1.0.0",
+    "Year": 2023
+  },
+  "Company": {
+    "Name": "MyName",
+    "Short": "MN",
+    "Address": "My Street 1st",
+    "City": "MyCity"
+  },
+  "ConnectionStrings": {
+    "MSCON": "Data Source=localhost;Initial Catalog=MYDB;User Id=sa;Password=mypassword;Integrated Security=false;",
+    "PGCON": "Server=localhost;User Id=postgres;Password=mypassword;Database=MYDB;Pooling=false;"
+  },
+  "RFCConnections": [
+    {
+      "Name": "MYRFC",
+      "RfcName": "MYRFC",
+      "AppServerHost": "127.0.0.1",
+      "SAPRouter": "/H/127.0.0.1",
+      "Client": "999",
+      "Language": "EN",
+      "SystemNumber": "99",
+      "PoolSize": "9"
+    }
+  ],
+  "RFCActors": [
+    {
+      "Name": "SYS",
+      "User": "SYSUSER",
+      "Password": "mypassword"
+    }
+  ]
+}

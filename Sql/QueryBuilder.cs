@@ -313,7 +313,7 @@ namespace Ceasier.Sql
             if (_filters.Count > 0)
             {
                 var criteria = string.Join(separator, _filters);
-                var start = criteria.IndexOf(" ");
+                var start = _filters[0].IndexOf(" ");
 
                 if (start > 0)
                 {
