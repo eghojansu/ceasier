@@ -1,5 +1,6 @@
 ﻿using System.Data.Common;
 using System.Data;
+using System;
 
 namespace Ceasier.Sql
 {
@@ -30,5 +31,7 @@ namespace Ceasier.Sql
         string QuerySelectStart(QueryBuilder qb, string cmd);
 
         string QuerySelectEnd(QueryBuilder qb, string cmd);
+
+        bool IsConnectionError(Exception error);
     }
 }

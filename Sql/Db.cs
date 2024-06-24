@@ -4,7 +4,6 @@ using System.Data.Common;
 using System.Data;
 using System.Linq;
 using Ceasier.Utils;
-using System.Web.Mvc;
 
 namespace Ceasier.Sql
 {
@@ -111,8 +110,13 @@ namespace Ceasier.Sql
             {
                 Run<int>(cmd, parameters, false, CommandType.Text);
             }
-            catch
+            catch (Exception e)
             {
+                if (Driver.IsConnectionError(e))
+                {
+                    throw e;
+                }
+
                 return false;
             }
 
@@ -466,7 +470,9 @@ namespace Ceasier.Sql
                 return param;
             }
 
-            return Driver.CreateParameterFor(cmd, name, value ?? DBNull.Value);
+            var v = value is string s && s == "" ? string.Empty : value;
+
+            return Driver.CreateParameterFor(cmd, name, v ?? DBNull.Value);
         }
 
         private static bool TryGetReturnParameter(DbCommand cmd, out int value)
