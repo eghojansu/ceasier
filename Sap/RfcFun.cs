@@ -40,6 +40,8 @@ namespace Ceasier.Sap
             _returnMessageType = returnMessageType;
         }
 
+        public IRfcTable ReturnTable => GetTable(_returnTable);
+
         public IRfcTable Result
         {
             get
@@ -169,7 +171,7 @@ namespace Ceasier.Sap
 
         public void ApplyArgs(string table, object sets)
         {
-            IRfcTable args = Fun.GetTable(table);
+            var args = GetTable(table);
 
             args.Clear();
             args.Append();
@@ -191,9 +193,7 @@ namespace Ceasier.Sap
 
             try
             {
-                var error = Fun.GetTable(_returnTable);
-
-                foreach (var row1 in error)
+                foreach (var row1 in ReturnTable)
                 {
                     row = row1;
                 }
