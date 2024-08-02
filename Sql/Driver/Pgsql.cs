@@ -44,11 +44,15 @@ namespace Ceasier.Sql.Driver
         public void TableInsert(IDb db, DataTable dt)
         {
             var conn = db.GetConnection() as NpgsqlConnection;
+            var auto = conn.State != ConnectionState.Open;
             var copy = new DTCopy(dt);
 
             NpgsqlTransaction trans = default;
 
-            conn.Open();
+            if (auto)
+            {
+                conn.Open();
+            }
 
             try
             {
@@ -74,6 +78,13 @@ namespace Ceasier.Sql.Driver
                 trans?.Rollback();
 
                 throw;
+            }
+            finally
+            {
+                if (auto)
+                {
+                    conn.Close();
+                }
             }
         }
 
