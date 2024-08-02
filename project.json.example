@@ -33,5 +33,8 @@
       "User": "SYSUSER",
       "Password": "mypassword"
     }
+  ],
+  "RFCMaps": [
+    "RFC_NAME:RFC_CONNECTION:RFC_ACTOR_NAME"
   ]
 }
