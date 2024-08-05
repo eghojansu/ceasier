@@ -3,8 +3,6 @@ using SAP.Middleware.Connector;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using static Npgsql.Replication.PgOutput.Messages.RelationMessage;
-using static OfficeOpenXml.ExcelErrorValue;
 
 namespace Ceasier.Sap
 {

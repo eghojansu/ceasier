@@ -52,21 +52,20 @@ namespace Ceasier
 
         public RfcFun GetRFCFunction(string name, string profileName, string actorName) => new RfcFun(name, GetRFCConfiguration(profileName, actorName));
 
-        public RfcFun GetRFCFunction(string name)
+        public RfcFun GetRFCFunction(string name) => GetRFCFunction(GetRFCMap(name));
+
+        public RfcFun GetRFCFunction(RfcMap map) => GetRFCFunction(map.Name, map.Profile, map.Actor);
+
+        public RfcFun GetRFCFunctionWithMap(string name, string profileName, string actorName)
         {
-            var maps = GetRFCMap(name).Split(':');
+            var map = GetRFCMap(name);
 
-            if (maps.Length < 3)
-            {
-                throw new Exception($"Invalid map value: {name}");
-            }
-
-            return GetRFCFunction(maps[0], maps[1], maps[2]);
+            return GetRFCFunction(map.Name, profileName ?? map.Profile, actorName ?? map.Actor);
         }
 
-        public List<string> GetRFCMaps() => Configuration.GetSection("RFCMaps").Get<List<string>>();
+        public List<RfcMap> GetRFCMaps() => Configuration.GetSection("RFCMaps").Get<List<string>>().ConvertAll(value => new RfcMap(value));
 
-        public string GetRFCMap(string name) => GetRFCMaps().FirstOrDefault(map => map.StartsWith($"{name}:")) ?? throw new Exception($"RFC map not found: {name}");
+        public RfcMap GetRFCMap(string name) => GetRFCMaps().FirstOrDefault(map => map.Name.Equals(name)) ?? throw new Exception($"RFC map not found: {name}");
         
         public RfcConfigParameters GetRFCConfiguration(string connectionName, string actorName) => GetRFCConfiguration(GetRFCConnection(connectionName, actorName));
 

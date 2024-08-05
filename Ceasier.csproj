@@ -181,6 +181,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Sap\RfcField.cs" />
     <Compile Include="Sap\RfcFun.cs" />
+    <Compile Include="Sap\RfcMap.cs" />
     <Compile Include="Sql\Db.cs" />
     <Compile Include="Sql\IDriver.cs" />
     <Compile Include="Sql\IDb.cs" />
